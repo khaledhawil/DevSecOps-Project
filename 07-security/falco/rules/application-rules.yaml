@@ -1,0 +1,203 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: falco-rules
+  namespace: falco
+data:
+  application_rules.yaml: |
+    # Application-Specific Falco Rules for DevSecOps Platform
+    
+    - rule: Unexpected Shell Spawn in User Service
+      desc: Detect unexpected shell execution in user-service containers
+      condition: >
+        spawned_process and
+        container and
+        container.image.repository contains "user-service" and
+        proc.name in (shell_binaries)
+      output: >
+        Shell spawned in user-service container
+        (user=%user.name command=%proc.cmdline container_id=%container.id 
+        container_name=%container.name image=%container.image.repository:%container.image.tag)
+      priority: WARNING
+      tags: [container, shell, mitre_execution]
+    
+    - rule: Unexpected Network Connection from Auth Service
+      desc: Detect unexpected outbound connections from auth-service
+      condition: >
+        outbound and
+        container and
+        container.image.repository contains "auth-service" and
+        not fd.sip in (postgres_ips, redis_ips) and
+        not fd.sport in (443, 80)
+      output: >
+        Unexpected network connection from auth-service
+        (user=%user.name connection=%fd.name container=%container.name 
+        image=%container.image.repository)
+      priority: NOTICE
+      tags: [network, container]
+    
+    - rule: Sensitive File Access in Notification Service
+      desc: Detect access to sensitive files in notification-service
+      condition: >
+        open_read and
+        container and
+        container.image.repository contains "notification-service" and
+        fd.name in (sensitive_files)
+      output: >
+        Sensitive file opened in notification-service
+        (user=%user.name file=%fd.name command=%proc.cmdline 
+        container=%container.name)
+      priority: WARNING
+      tags: [filesystem, container]
+    
+    - rule: Unexpected Process in Analytics Service
+      desc: Detect unexpected process execution in analytics-service
+      condition: >
+        spawned_process and
+        container and
+        container.image.repository contains "analytics-service" and
+        not proc.name in (java, sh, bash, sleep, ps, grep)
+      output: >
+        Unexpected process in analytics-service
+        (user=%user.name process=%proc.name cmdline=%proc.cmdline 
+        container=%container.name)
+      priority: NOTICE
+      tags: [process, container]
+    
+    - rule: Frontend Container Writing to Unexpected Location
+      desc: Detect writes to unexpected locations in frontend container
+      condition: >
+        open_write and
+        container and
+        container.image.repository contains "frontend" and
+        not fd.name startswith "/tmp/" and
+        not fd.name startswith "/var/log/"
+      output: >
+        Unexpected file write in frontend container
+        (user=%user.name file=%fd.name process=%proc.name 
+        container=%container.name)
+      priority: WARNING
+      tags: [filesystem, container]
+    
+    - rule: Database Credentials Access Attempt
+      desc: Detect attempts to read database credentials from secrets
+      condition: >
+        open_read and
+        container and
+        fd.name glob "/run/secrets/kubernetes.io/*" and
+        fd.name contains "database"
+      output: >
+        Database credentials access detected
+        (user=%user.name file=%fd.name process=%proc.name 
+        container=%container.name image=%container.image.repository)
+      priority: WARNING
+      tags: [secrets, credentials]
+    
+    - rule: Package Management in Running Container
+      desc: Detect package management tools in running containers
+      condition: >
+        spawned_process and
+        container and
+        proc.name in (package_mgmt_binaries)
+      output: >
+        Package management tool executed in container
+        (user=%user.name command=%proc.cmdline container=%container.name 
+        image=%container.image.repository)
+      priority: ERROR
+      tags: [container, software_mgmt]
+    
+    - rule: Container Privilege Escalation Attempt
+      desc: Detect privilege escalation attempts in containers
+      condition: >
+        spawned_process and
+        container and
+        proc.name in (sudo, su, setuid_binaries) and
+        not user.name = "root"
+      output: >
+        Privilege escalation attempt in container
+        (user=%user.name process=%proc.name container=%container.name 
+        image=%container.image.repository)
+      priority: CRITICAL
+      tags: [container, privilege_escalation]
+    
+    - rule: Suspicious Network Tool Usage
+      desc: Detect usage of network scanning/sniffing tools
+      condition: >
+        spawned_process and
+        container and
+        proc.name in (nmap, tcpdump, wireshark, netcat, nc, ncat)
+      output: >
+        Suspicious network tool executed in container
+        (user=%user.name command=%proc.cmdline container=%container.name)
+      priority: WARNING
+      tags: [network, tool]
+    
+    - rule: Binary Execution from Temp Directory
+      desc: Detect execution of binaries from temporary directories
+      condition: >
+        spawned_process and
+        container and
+        (proc.exe startswith "/tmp/" or 
+         proc.exe startswith "/var/tmp/" or
+         proc.exe startswith "/dev/shm/")
+      output: >
+        Binary executed from temporary directory
+        (user=%user.name process=%proc.exe cmdline=%proc.cmdline 
+        container=%container.name)
+      priority: WARNING
+      tags: [process, filesystem]
+    
+    - rule: Cryptocurrency Mining Activity
+      desc: Detect potential cryptocurrency mining in containers
+      condition: >
+        spawned_process and
+        container and
+        (proc.name in (xmrig, minerd, cpuminer) or
+         proc.cmdline contains "stratum+tcp" or
+         proc.cmdline contains "pool.minergate.com")
+      output: >
+        Cryptocurrency mining activity detected
+        (user=%user.name command=%proc.cmdline container=%container.name)
+      priority: CRITICAL
+      tags: [malware, cryptomining]
+    
+    - rule: Kubernetes Secret Access
+      desc: Detect direct access to Kubernetes secrets
+      condition: >
+        open_read and
+        container and
+        fd.name glob "/var/run/secrets/kubernetes.io/*"
+      output: >
+        Kubernetes secret accessed
+        (user=%user.name file=%fd.name process=%proc.name 
+        container=%container.name)
+      priority: NOTICE
+      tags: [kubernetes, secrets]
+    
+    - list: shell_binaries
+      items: [bash, sh, zsh, csh, ksh, ash, dash]
+    
+    - list: package_mgmt_binaries
+      items: [apt, apt-get, dpkg, yum, rpm, apk, pip, pip3, npm, gem, mvn, gradle]
+    
+    - list: setuid_binaries
+      items: [sudo, su, doas]
+    
+    - list: sensitive_files
+      items:
+        - /etc/shadow
+        - /etc/sudoers
+        - /etc/pam.conf
+        - /etc/security/pwquality.conf
+        - /root/.ssh/id_rsa
+        - /root/.ssh/id_dsa
+        - /root/.ssh/id_ed25519
+        - /home/*/.ssh/id_rsa
+        - /home/*/.ssh/id_dsa
+        - /home/*/.ssh/id_ed25519
+    
+    - list: postgres_ips
+      items: ["10.0.0.0/8"]
+    
+    - list: redis_ips
+      items: ["10.0.0.0/8"]

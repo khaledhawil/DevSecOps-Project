@@ -1,0 +1,40 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sAllowedRepos
+metadata:
+  name: allowed-image-repos
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: ["apps"]
+        kinds: ["Deployment", "StatefulSet", "DaemonSet"]
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces:
+      - "user-service"
+      - "auth-service"
+      - "notification-service"
+      - "analytics-service"
+      - "frontend"
+  parameters:
+    repos:
+      # AWS ECR repositories for our services
+      - "<AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/user-service"
+      - "<AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/auth-service"
+      - "<AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/notification-service"
+      - "<AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/analytics-service"
+      - "<AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/frontend"
+      # Allow official images for infrastructure
+      - "docker.io/library/"
+      - "quay.io/"
+      - "gcr.io/"
+      # Allow monitoring stack
+      - "prom/prometheus"
+      - "grafana/grafana"
+      - "fluent/fluent-bit"
+      - "prom/alertmanager"
+      # Allow security stack
+      - "openpolicyagent/gatekeeper"
+      - "falcosecurity/falco"
+      - "hashicorp/vault"
+      - "aquasec/trivy"

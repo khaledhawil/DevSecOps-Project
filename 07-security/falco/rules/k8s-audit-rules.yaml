@@ -1,0 +1,167 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: falco-k8s-audit-rules
+  namespace: falco
+data:
+  k8s_audit_rules.yaml: |
+    # Kubernetes Audit Rules for Falco
+    
+    - rule: Unauthorized Secret Access
+      desc: Detect unauthorized access to Kubernetes secrets
+      condition: >
+        kevt and
+        ka.verb = "get" and
+        ka.target.resource = "secrets" and
+        not ka.user.name in (allowed_secret_readers)
+      output: >
+        Unauthorized secret access
+        (user=%ka.user.name secret=%ka.target.name namespace=%ka.target.namespace 
+        verb=%ka.verb)
+      priority: WARNING
+      source: k8s_audit
+      tags: [k8s, secrets]
+    
+    - rule: ConfigMap Modification
+      desc: Detect modifications to critical ConfigMaps
+      condition: >
+        kevt and
+        ka.verb in (create, update, patch, delete) and
+        ka.target.resource = "configmaps" and
+        ka.target.name in (critical_configmaps)
+      output: >
+        Critical ConfigMap modified
+        (user=%ka.user.name configmap=%ka.target.name namespace=%ka.target.namespace 
+        verb=%ka.verb)
+      priority: WARNING
+      source: k8s_audit
+      tags: [k8s, configmap]
+    
+    - rule: Service Account Token Abuse
+      desc: Detect potential service account token abuse
+      condition: >
+        kevt and
+        ka.verb in (create, update) and
+        ka.target.resource = "pods" and
+        ka.req.pod.service_account_name in (privileged_service_accounts)
+      output: >
+        Pod created with privileged service account
+        (user=%ka.user.name pod=%ka.target.name namespace=%ka.target.namespace 
+        service_account=%ka.req.pod.service_account_name)
+      priority: WARNING
+      source: k8s_audit
+      tags: [k8s, rbac]
+    
+    - rule: Namespace Deletion
+      desc: Detect namespace deletion attempts
+      condition: >
+        kevt and
+        ka.verb = "delete" and
+        ka.target.resource = "namespaces"
+      output: >
+        Namespace deletion attempt
+        (user=%ka.user.name namespace=%ka.target.name verb=%ka.verb)
+      priority: CRITICAL
+      source: k8s_audit
+      tags: [k8s, namespace]
+    
+    - rule: RBAC Modification
+      desc: Detect changes to RBAC resources
+      condition: >
+        kevt and
+        ka.verb in (create, update, patch, delete) and
+        ka.target.resource in (clusterroles, roles, clusterrolebindings, rolebindings)
+      output: >
+        RBAC resource modified
+        (user=%ka.user.name resource=%ka.target.resource name=%ka.target.name 
+        namespace=%ka.target.namespace verb=%ka.verb)
+      priority: WARNING
+      source: k8s_audit
+      tags: [k8s, rbac]
+    
+    - rule: Privileged Pod Creation
+      desc: Detect creation of privileged pods
+      condition: >
+        kevt and
+        ka.verb in (create, update) and
+        ka.target.resource = "pods" and
+        ka.req.pod.privileged = true
+      output: >
+        Privileged pod created
+        (user=%ka.user.name pod=%ka.target.name namespace=%ka.target.namespace)
+      priority: WARNING
+      source: k8s_audit
+      tags: [k8s, security]
+    
+    - rule: Host Network Pod Creation
+      desc: Detect pods using host network
+      condition: >
+        kevt and
+        ka.verb in (create, update) and
+        ka.target.resource = "pods" and
+        ka.req.pod.host_network = true
+      output: >
+        Pod with host network created
+        (user=%ka.user.name pod=%ka.target.name namespace=%ka.target.namespace)
+      priority: WARNING
+      source: k8s_audit
+      tags: [k8s, security]
+    
+    - rule: Exec into Pod
+      desc: Detect exec sessions into pods
+      condition: >
+        kevt and
+        ka.verb = "create" and
+        ka.target.resource = "pods/exec"
+      output: >
+        Exec into pod
+        (user=%ka.user.name pod=%ka.target.name namespace=%ka.target.namespace 
+        container=%ka.req.pod.container_name)
+      priority: NOTICE
+      source: k8s_audit
+      tags: [k8s, exec]
+    
+    - rule: Port Forward Started
+      desc: Detect port-forward sessions
+      condition: >
+        kevt and
+        ka.verb = "create" and
+        ka.target.resource = "pods/portforward"
+      output: >
+        Port forward started
+        (user=%ka.user.name pod=%ka.target.name namespace=%ka.target.namespace)
+      priority: NOTICE
+      source: k8s_audit
+      tags: [k8s, portforward]
+    
+    - rule: Service Account Creation
+      desc: Detect new service account creation
+      condition: >
+        kevt and
+        ka.verb = "create" and
+        ka.target.resource = "serviceaccounts"
+      output: >
+        Service account created
+        (user=%ka.user.name service_account=%ka.target.name 
+        namespace=%ka.target.namespace)
+      priority: NOTICE
+      source: k8s_audit
+      tags: [k8s, rbac]
+    
+    - list: allowed_secret_readers
+      items:
+        - system:serviceaccount:kube-system:*
+        - system:serviceaccount:monitoring:*
+        - system:serviceaccount:vault:*
+    
+    - list: critical_configmaps
+      items:
+        - prometheus-config
+        - grafana-config
+        - falco-config
+        - gatekeeper-config
+    
+    - list: privileged_service_accounts
+      items:
+        - default
+        - admin

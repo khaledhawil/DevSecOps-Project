@@ -1,0 +1,61 @@
+{
+  "name": "DevSecOps Quality Gate",
+  "description": "Custom quality gate for DevSecOps platform with strict security requirements",
+  "isDefault": false,
+  "conditions": [
+    {
+      "metric": "new_coverage",
+      "op": "LT",
+      "error": "80",
+      "warning": "85"
+    },
+    {
+      "metric": "new_duplicated_lines_density",
+      "op": "GT",
+      "error": "3",
+      "warning": "5"
+    },
+    {
+      "metric": "new_security_rating",
+      "op": "GT",
+      "error": "1",
+      "warning": ""
+    },
+    {
+      "metric": "new_reliability_rating",
+      "op": "GT",
+      "error": "1",
+      "warning": ""
+    },
+    {
+      "metric": "new_maintainability_rating",
+      "op": "GT",
+      "error": "1",
+      "warning": "2"
+    },
+    {
+      "metric": "new_security_hotspots_reviewed",
+      "op": "LT",
+      "error": "100",
+      "warning": ""
+    },
+    {
+      "metric": "new_vulnerabilities",
+      "op": "GT",
+      "error": "0",
+      "warning": ""
+    },
+    {
+      "metric": "new_bugs",
+      "op": "GT",
+      "error": "0",
+      "warning": "5"
+    },
+    {
+      "metric": "new_code_smells",
+      "op": "GT",
+      "error": "10",
+      "warning": "20"
+    }
+  ]
+}

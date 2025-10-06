@@ -1,0 +1,23 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sContainerLimits
+metadata:
+  name: container-must-have-limits
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: ["apps"]
+        kinds: ["Deployment", "StatefulSet", "DaemonSet"]
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces:
+      - "user-service"
+      - "auth-service"
+      - "notification-service"
+      - "analytics-service"
+      - "frontend"
+  parameters:
+    cpu: "2000m"    # 2 CPU cores maximum
+    memory: "4Gi"   # 4GB memory maximum
+    exemptImages:
+      - "gcr.io/distroless/*"  # Distroless images are exempt

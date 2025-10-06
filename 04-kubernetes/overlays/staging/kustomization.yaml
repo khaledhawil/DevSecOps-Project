@@ -1,0 +1,76 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: devsecops-staging
+
+bases:
+- ../../base
+
+nameSuffix: -staging
+
+commonLabels:
+  environment: staging
+
+replicas:
+- name: user-service
+  count: 2
+- name: auth-service
+  count: 2
+- name: notification-service
+  count: 2
+- name: analytics-service
+  count: 2
+- name: frontend
+  count: 2
+
+images:
+- name: user-service
+  newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/user-service
+  newTag: staging-latest
+- name: auth-service
+  newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/auth-service
+  newTag: staging-latest
+- name: notification-service
+  newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/notification-service
+  newTag: staging-latest
+- name: analytics-service
+  newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/analytics-service
+  newTag: staging-latest
+- name: frontend
+  newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/frontend
+  newTag: staging-latest
+
+patchesStrategicMerge:
+- patches/hpa.yaml
+
+configMapGenerator:
+- name: user-service-config
+  behavior: merge
+  literals:
+  - db-host=devsecops-staging-postgres.xxxxx.us-east-1.rds.amazonaws.com
+  - redis-host=devsecops-staging-redis.xxxxx.cache.amazonaws.com
+  - log-level=info
+
+- name: auth-service-config
+  behavior: merge
+  literals:
+  - db-host=devsecops-staging-postgres.xxxxx.us-east-1.rds.amazonaws.com
+  - redis-host=devsecops-staging-redis.xxxxx.cache.amazonaws.com
+  - log-level=info
+
+- name: notification-service-config
+  behavior: merge
+  literals:
+  - db-host=devsecops-staging-postgres.xxxxx.us-east-1.rds.amazonaws.com
+  - redis-host=devsecops-staging-redis.xxxxx.cache.amazonaws.com
+
+- name: analytics-service-config
+  behavior: merge
+  literals:
+  - db-host=devsecops-staging-postgres.xxxxx.us-east-1.rds.amazonaws.com
+  - redis-host=devsecops-staging-redis.xxxxx.cache.amazonaws.com
+
+- name: frontend-config
+  behavior: merge
+  literals:
+  - api-url=http://staging.devsecops.local

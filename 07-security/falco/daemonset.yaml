@@ -1,0 +1,351 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: falco
+  labels:
+    app: falco
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: falco
+  namespace: falco
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: falco
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+      - namespaces
+      - pods
+      - replicationcontrollers
+      - services
+      - events
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - apps
+    resources:
+      - daemonsets
+      - deployments
+      - replicasets
+      - statefulsets
+    verbs:
+      - get
+      - list
+      - watch
+  - nonResourceURLs:
+      - /healthz
+      - /healthz/*
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: falco
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: falco
+subjects:
+  - kind: ServiceAccount
+    name: falco
+    namespace: falco
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: falco-config
+  namespace: falco
+data:
+  falco.yaml: |
+    rules_file:
+      - /etc/falco/falco_rules.yaml
+      - /etc/falco/falco_rules.local.yaml
+      - /etc/falco/k8s_audit_rules.yaml
+      - /etc/falco/application_rules.yaml
+    
+    # Plugins
+    plugins:
+      - name: k8saudit
+        library_path: libk8saudit.so
+        init_config: ""
+        open_params: "http://:9765/k8s-audit"
+      - name: json
+        library_path: libjson.so
+        init_config: ""
+    
+    # Load plugins
+    load_plugins: [k8saudit, json]
+    
+    # Output channels
+    json_output: true
+    json_include_output_property: true
+    json_include_tags_property: true
+    
+    # Logging
+    log_stderr: true
+    log_syslog: true
+    log_level: info
+    
+    # Output rate limiting
+    priority: debug
+    
+    # Buffering
+    buffered_outputs: false
+    
+    # Syscall event drops
+    syscall_event_drops:
+      actions:
+        - log
+        - alert
+      rate: 0.03333
+      max_burst: 10
+    
+    # Rules matching
+    syscall_event_timeouts:
+      max_consecutives: 1000
+    
+    # Output timeout
+    output_timeout: 2000
+    
+    # Grpc output
+    grpc:
+      enabled: true
+      bind_address: "unix:///var/run/falco/falco.sock"
+      threadiness: 0
+    
+    # gRPC output
+    grpc_output:
+      enabled: true
+    
+    # Webserver
+    webserver:
+      enabled: true
+      listen_port: 8765
+      k8s_healthz_endpoint: /healthz
+      ssl_enabled: false
+    
+    # File output
+    file_output:
+      enabled: false
+      keep_alive: false
+      filename: ./events.txt
+    
+    # Stdout output
+    stdout_output:
+      enabled: true
+    
+    # Syslog output
+    syslog_output:
+      enabled: true
+    
+    # HTTP output
+    http_output:
+      enabled: true
+      url: "http://falcosidekick:2801"
+      user_agent: "falcosecurity/falco"
+    
+    # Program output
+    program_output:
+      enabled: false
+      keep_alive: false
+      program: "jq '{text: .output}' | curl -d @- -X POST https://hooks.slack.com/services/XXX"
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: falco
+  namespace: falco
+  labels:
+    app: falco
+    role: security
+spec:
+  selector:
+    matchLabels:
+      app: falco
+      role: security
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: falco
+        role: security
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8765"
+    spec:
+      serviceAccountName: falco
+      hostNetwork: true
+      hostPID: true
+      tolerations:
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/master
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/control-plane
+      containers:
+      - name: falco
+        image: falcosecurity/falco-no-driver:0.36.2
+        imagePullPolicy: IfNotPresent
+        args:
+          - /usr/bin/falco
+          - --cri
+          - /run/containerd/containerd.sock
+          - --cri
+          - /run/crio/crio.sock
+          - -K
+          - /var/run/secrets/kubernetes.io/serviceaccount/token
+          - -k
+          - https://$(KUBERNETES_SERVICE_HOST)
+          - --k8s-node
+          - "$(FALCO_K8S_NODE_NAME)"
+          - -pk
+        env:
+          - name: FALCO_K8S_NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+          - name: FALCO_BPF_PROBE
+            value: ""
+        securityContext:
+          privileged: true
+        volumeMounts:
+          - mountPath: /host/var/run/docker.sock
+            name: docker-socket
+          - mountPath: /host/run/containerd/containerd.sock
+            name: containerd-socket
+          - mountPath: /host/run/crio/crio.sock
+            name: crio-socket
+          - mountPath: /host/dev
+            name: dev-fs
+            readOnly: true
+          - mountPath: /host/proc
+            name: proc-fs
+            readOnly: true
+          - mountPath: /host/boot
+            name: boot-fs
+            readOnly: true
+          - mountPath: /host/lib/modules
+            name: lib-modules
+          - mountPath: /host/usr
+            name: usr-fs
+            readOnly: true
+          - mountPath: /host/etc
+            name: etc-fs
+            readOnly: true
+          - mountPath: /etc/falco
+            name: config
+          - mountPath: /var/run/falco
+            name: grpc-socket-dir
+        resources:
+          requests:
+            cpu: 100m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8765
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8765
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 5
+      volumes:
+        - name: docker-socket
+          hostPath:
+            path: /var/run/docker.sock
+        - name: containerd-socket
+          hostPath:
+            path: /run/containerd/containerd.sock
+        - name: crio-socket
+          hostPath:
+            path: /run/crio/crio.sock
+        - name: dev-fs
+          hostPath:
+            path: /dev
+        - name: proc-fs
+          hostPath:
+            path: /proc
+        - name: boot-fs
+          hostPath:
+            path: /boot
+        - name: lib-modules
+          hostPath:
+            path: /lib/modules
+        - name: usr-fs
+          hostPath:
+            path: /usr
+        - name: etc-fs
+          hostPath:
+            path: /etc
+        - name: config
+          configMap:
+            name: falco-config
+            items:
+              - key: falco.yaml
+                path: falco.yaml
+        - name: grpc-socket-dir
+          emptyDir: {}
+      initContainers:
+      - name: falco-driver-loader
+        image: falcosecurity/falco-driver-loader:0.36.2
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          privileged: true
+        volumeMounts:
+          - mountPath: /host/proc
+            name: proc-fs
+            readOnly: true
+          - mountPath: /host/boot
+            name: boot-fs
+            readOnly: true
+          - mountPath: /host/lib/modules
+            name: lib-modules
+          - mountPath: /host/usr
+            name: usr-fs
+            readOnly: true
+          - mountPath: /host/etc
+            name: etc-fs
+            readOnly: true
+        env:
+          - name: FALCO_BPF_PROBE
+            value: ""
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: falco
+  namespace: falco
+  labels:
+    app: falco
+spec:
+  type: ClusterIP
+  selector:
+    app: falco
+  ports:
+    - name: grpc
+      port: 5060
+      targetPort: 5060
+      protocol: TCP
+    - name: metrics
+      port: 8765
+      targetPort: 8765
+      protocol: TCP

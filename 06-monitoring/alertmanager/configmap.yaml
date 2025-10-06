@@ -1,0 +1,208 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: monitoring
+data:
+  alertmanager.yml: |
+    global:
+      resolve_timeout: 5m
+      slack_api_url: 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL'
+
+    # Templates
+    templates:
+      - '/etc/alertmanager/templates/*.tmpl'
+
+    # Route tree
+    route:
+      group_by: ['alertname', 'cluster', 'service']
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 12h
+      receiver: 'default'
+      routes:
+        # Critical alerts to PagerDuty and Slack
+        - match:
+            severity: critical
+          receiver: 'critical-alerts'
+          continue: true
+
+        # Warning alerts to Slack
+        - match:
+            severity: warning
+          receiver: 'warning-alerts'
+          continue: true
+
+        # Info alerts to Slack
+        - match:
+            severity: info
+          receiver: 'info-alerts'
+
+    # Inhibition rules
+    inhibit_rules:
+      # Inhibit warning alerts if critical alert is firing
+      - source_match:
+          severity: 'critical'
+        target_match:
+          severity: 'warning'
+        equal: ['alertname', 'service', 'namespace']
+
+      # Inhibit info alerts if warning or critical is firing
+      - source_match_re:
+          severity: 'critical|warning'
+        target_match:
+          severity: 'info'
+        equal: ['alertname', 'service', 'namespace']
+
+    # Receivers
+    receivers:
+      - name: 'default'
+        slack_configs:
+          - channel: '#alerts-default'
+            title: '{{ .GroupLabels.alertname }}'
+            text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+            send_resolved: true
+
+      - name: 'critical-alerts'
+        pagerduty_configs:
+          - service_key: 'YOUR_PAGERDUTY_SERVICE_KEY'
+            severity: 'critical'
+            description: '{{ .GroupLabels.alertname }}: {{ .CommonAnnotations.summary }}'
+        slack_configs:
+          - channel: '#alerts-critical'
+            username: 'AlertManager'
+            icon_emoji: ':fire:'
+            title: '[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Labels.alertname }}
+              *Severity:* {{ .Labels.severity }}
+              *Service:* {{ .Labels.service }}
+              *Namespace:* {{ .Labels.namespace }}
+              *Description:* {{ .Annotations.description }}
+              {{ end }}
+            send_resolved: true
+            actions:
+              - type: button
+                text: 'Runbook'
+                url: 'https://runbooks.example.com/{{ .GroupLabels.alertname }}'
+              - type: button
+                text: 'Silence'
+                url: '{{ .ExternalURL }}/#/silences/new?filter=%7B{{ range .CommonLabels.SortedPairs }}{{ .Name }}%3D%22{{ .Value }}%22%2C{{ end }}%7D'
+
+      - name: 'warning-alerts'
+        slack_configs:
+          - channel: '#alerts-warning'
+            username: 'AlertManager'
+            icon_emoji: ':warning:'
+            title: '[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Labels.alertname }}
+              *Severity:* {{ .Labels.severity }}
+              *Service:* {{ .Labels.service }}
+              *Description:* {{ .Annotations.description }}
+              {{ end }}
+            send_resolved: true
+
+      - name: 'info-alerts'
+        slack_configs:
+          - channel: '#alerts-info'
+            username: 'AlertManager'
+            icon_emoji: ':information_source:'
+            title: '{{ .GroupLabels.alertname }}'
+            text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+            send_resolved: false
+
+      - name: 'email-alerts'
+        email_configs:
+          - to: 'ops-team@example.com'
+            from: 'alertmanager@example.com'
+            smarthost: 'smtp.gmail.com:587'
+            auth_username: 'alertmanager@example.com'
+            auth_password: 'YOUR_APP_PASSWORD'
+            headers:
+              Subject: '[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}'
+            html: '{{ template "email.html" . }}'
+            send_resolved: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: monitoring
+  labels:
+    app: alertmanager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alertmanager
+  template:
+    metadata:
+      labels:
+        app: alertmanager
+    spec:
+      containers:
+        - name: alertmanager
+          image: prom/alertmanager:v0.26.0
+          args:
+            - '--config.file=/etc/alertmanager/alertmanager.yml'
+            - '--storage.path=/alertmanager'
+            - '--cluster.advertise-address=0.0.0.0:9093'
+          ports:
+            - name: web
+              containerPort: 9093
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: 9093
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 9093
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alertmanager
+            - name: storage
+              mountPath: /alertmanager
+            - name: templates
+              mountPath: /etc/alertmanager/templates
+      volumes:
+        - name: config
+          configMap:
+            name: alertmanager-config
+        - name: storage
+          emptyDir: {}
+        - name: templates
+          configMap:
+            name: alertmanager-templates
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  namespace: monitoring
+  labels:
+    app: alertmanager
+spec:
+  type: ClusterIP
+  ports:
+    - name: web
+      port: 9093
+      targetPort: 9093
+      protocol: TCP
+  selector:
+    app: alertmanager

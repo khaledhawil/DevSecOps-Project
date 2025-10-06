@@ -1,0 +1,140 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: user-service-prod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: devsecops-prod
+  source:
+    repoURL: https://github.com/khaledhawil/DevSecOps-Project.git
+    targetRevision: main
+    path: 04-kubernetes/overlays/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: devsecops-prod
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 2
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+  revisionHistoryLimit: 20
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: auth-service-prod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: devsecops-prod
+  source:
+    repoURL: https://github.com/khaledhawil/DevSecOps-Project.git
+    targetRevision: main
+    path: 04-kubernetes/overlays/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: devsecops-prod
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 2
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+  revisionHistoryLimit: 20
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: notification-service-prod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: devsecops-prod
+  source:
+    repoURL: https://github.com/khaledhawil/DevSecOps-Project.git
+    targetRevision: main
+    path: 04-kubernetes/overlays/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: devsecops-prod
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 2
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+  revisionHistoryLimit: 20
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: analytics-service-prod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: devsecops-prod
+  source:
+    repoURL: https://github.com/khaledhawil/DevSecOps-Project.git
+    targetRevision: main
+    path: 04-kubernetes/overlays/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: devsecops-prod
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 2
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+  revisionHistoryLimit: 20
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: frontend-prod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: devsecops-prod
+  source:
+    repoURL: https://github.com/khaledhawil/DevSecOps-Project.git
+    targetRevision: main
+    path: 04-kubernetes/overlays/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: devsecops-prod
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 2
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+  revisionHistoryLimit: 20

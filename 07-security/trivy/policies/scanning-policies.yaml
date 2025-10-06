@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trivy-policies
+  namespace: trivy-system
+data:
+  severity-policy.yaml: |
+    # Trivy Severity Policy
+    # Define thresholds for vulnerability severity
+    
+    # Critical vulnerabilities - Block deployment
+    critical:
+      max_count: 0
+      action: "deny"
+      description: "No critical vulnerabilities allowed"
+    
+    # High vulnerabilities - Allow with warning
+    high:
+      max_count: 5
+      action: "warn"
+      description: "Maximum 5 high severity vulnerabilities allowed"
+    
+    # Medium vulnerabilities - Allow
+    medium:
+      max_count: 20
+      action: "allow"
+      description: "Up to 20 medium severity vulnerabilities allowed"
+    
+    # Low vulnerabilities - Allow
+    low:
+      max_count: -1  # Unlimited
+      action: "allow"
+      description: "Low severity vulnerabilities are allowed"
+    
+    # Unknown vulnerabilities - Allow
+    unknown:
+      max_count: -1  # Unlimited
+      action: "allow"
+      description: "Unknown severity vulnerabilities are allowed"
+  
+  ignore-policy.yaml: |
+    # Trivy Ignore Policy
+    # Specify CVEs to ignore with justification
+    
+    # Example: Ignore specific CVE with expiration
+    # vulnerabilities:
+    #   - id: CVE-2021-12345
+    #     reason: "False positive - not applicable to our use case"
+    #     expires: "2024-12-31"
+    #     
+    #   - id: CVE-2021-67890
+    #     reason: "No patch available, mitigated by network policies"
+    #     expires: "2025-01-31"
+    
+    # Base images that are exempt from scanning
+    exempt_images:
+      - "gcr.io/distroless/static:nonroot"
+      - "gcr.io/distroless/base:nonroot"
+    
+    # Namespaces exempt from strict policies (dev/test only)
+    exempt_namespaces:
+      - "kube-system"
+      - "kube-public"
+      - "kube-node-lease"
+      - "trivy-system"
+      - "gatekeeper-system"
+  
+  scan-schedule.yaml: |
+    # Trivy Scan Schedule
+    # Configure automated scanning intervals
+    
+    # Scan all deployments daily at 2 AM
+    daily_scan:
+      schedule: "0 2 * * *"
+      namespaces: "all"
+      resources: ["deployments", "statefulsets", "daemonsets"]
+    
+    # Scan all images in registry weekly
+    weekly_registry_scan:
+      schedule: "0 3 * * 0"
+      scan_type: "registry"
+    
+    # Quick scan every 6 hours for critical namespaces
+    frequent_scan:
+      schedule: "0 */6 * * *"
+      namespaces: ["user-service", "auth-service"]
+      severity: ["CRITICAL", "HIGH"]

@@ -1,0 +1,27 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredLabels
+metadata:
+  name: must-have-owner-and-env
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: ["apps"]
+        kinds: ["Deployment", "StatefulSet", "DaemonSet"]
+      - apiGroups: [""]
+        kinds: ["Service", "Pod"]
+    namespaces:
+      - "user-service"
+      - "auth-service"
+      - "notification-service"
+      - "analytics-service"
+      - "frontend"
+  parameters:
+    message: "All resources must have 'app', 'owner', and 'environment' labels"
+    labels:
+      - key: "app"
+        allowedRegex: "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+      - key: "owner"
+        allowedRegex: "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+      - key: "environment"
+        allowedRegex: "^(dev|staging|prod)$"

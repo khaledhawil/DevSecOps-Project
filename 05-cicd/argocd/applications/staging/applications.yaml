@@ -1,0 +1,132 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: user-service-staging
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: devsecops-staging
+  source:
+    repoURL: https://github.com/khaledhawil/DevSecOps-Project.git
+    targetRevision: main
+    path: 04-kubernetes/overlays/staging
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: devsecops-staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 2m
+  revisionHistoryLimit: 10
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: auth-service-staging
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: devsecops-staging
+  source:
+    repoURL: https://github.com/khaledhawil/DevSecOps-Project.git
+    targetRevision: main
+    path: 04-kubernetes/overlays/staging
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: devsecops-staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
+    syncOptions:
+      - CreateNamespace=true
+  revisionHistoryLimit: 10
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: notification-service-staging
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: devsecops-staging
+  source:
+    repoURL: https://github.com/khaledhawil/DevSecOps-Project.git
+    targetRevision: main
+    path: 04-kubernetes/overlays/staging
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: devsecops-staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
+    syncOptions:
+      - CreateNamespace=true
+  revisionHistoryLimit: 10
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: analytics-service-staging
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: devsecops-staging
+  source:
+    repoURL: https://github.com/khaledhawil/DevSecOps-Project.git
+    targetRevision: main
+    path: 04-kubernetes/overlays/staging
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: devsecops-staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
+    syncOptions:
+      - CreateNamespace=true
+  revisionHistoryLimit: 10
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: frontend-staging
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: devsecops-staging
+  source:
+    repoURL: https://github.com/khaledhawil/DevSecOps-Project.git
+    targetRevision: main
+    path: 04-kubernetes/overlays/staging
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: devsecops-staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
+    syncOptions:
+      - CreateNamespace=true
+  revisionHistoryLimit: 10

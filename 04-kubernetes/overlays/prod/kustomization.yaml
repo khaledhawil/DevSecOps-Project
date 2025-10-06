@@ -1,0 +1,78 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: devsecops-prod
+
+bases:
+- ../../base
+
+nameSuffix: -prod
+
+commonLabels:
+  environment: prod
+
+replicas:
+- name: user-service
+  count: 3
+- name: auth-service
+  count: 3
+- name: notification-service
+  count: 3
+- name: analytics-service
+  count: 3
+- name: frontend
+  count: 3
+
+images:
+- name: user-service
+  newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/user-service
+  newTag: v1.0.0
+- name: auth-service
+  newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/auth-service
+  newTag: v1.0.0
+- name: notification-service
+  newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/notification-service
+  newTag: v1.0.0
+- name: analytics-service
+  newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/analytics-service
+  newTag: v1.0.0
+- name: frontend
+  newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/frontend
+  newTag: v1.0.0
+
+patchesStrategicMerge:
+- patches/resources.yaml
+- patches/hpa.yaml
+- patches/security.yaml
+
+configMapGenerator:
+- name: user-service-config
+  behavior: merge
+  literals:
+  - db-host=devsecops-prod-postgres.xxxxx.us-east-1.rds.amazonaws.com
+  - redis-host=devsecops-prod-redis.xxxxx.cache.amazonaws.com
+  - log-level=warn
+
+- name: auth-service-config
+  behavior: merge
+  literals:
+  - db-host=devsecops-prod-postgres.xxxxx.us-east-1.rds.amazonaws.com
+  - redis-host=devsecops-prod-redis.xxxxx.cache.amazonaws.com
+  - log-level=warn
+
+- name: notification-service-config
+  behavior: merge
+  literals:
+  - db-host=devsecops-prod-postgres.xxxxx.us-east-1.rds.amazonaws.com
+  - redis-host=devsecops-prod-redis.xxxxx.cache.amazonaws.com
+
+- name: analytics-service-config
+  behavior: merge
+  literals:
+  - db-host=devsecops-prod-postgres.xxxxx.us-east-1.rds.amazonaws.com
+  - redis-host=devsecops-prod-redis.xxxxx.cache.amazonaws.com
+
+- name: frontend-config
+  behavior: merge
+  literals:
+  - api-url=https://api.devsecops.com

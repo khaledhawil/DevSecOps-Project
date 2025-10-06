@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+data:
+  # Enable resource tracking with annotation
+  application.resourceTrackingMethod: annotation
+
+  # Timeout settings
+  timeout.reconciliation: 180s
+  timeout.hard.reconciliation: 0
+
+  # Repository credentials
+  repositories: |
+    - url: https://github.com/khaledhawil/DevSecOps-Project.git
+      name: devsecops-repo
+      type: git
+
+  # Resource customizations
+  resource.customizations: |
+    argoproj.io/Application:
+      health.lua: |
+        hs = {}
+        hs.status = "Progressing"
+        hs.message = ""
+        if obj.status ~= nil then
+          if obj.status.health ~= nil then
+            hs.status = obj.status.health.status
+            hs.message = obj.status.health.message
+          end
+        end
+        return hs
+
+  # Resource exclusions
+  resource.exclusions: |
+    - apiGroups:
+      - cilium.io
+      kinds:
+      - CiliumIdentity
+      clusters:
+      - "*"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-rbac-cm
+  namespace: argocd
+data:
+  # Default policy
+  policy.default: role:readonly
+
+  # RBAC policies
+  policy.csv: |
+    # Admin role
+    p, role:admin, applications, *, */*, allow
+    p, role:admin, clusters, *, *, allow
+    p, role:admin, repositories, *, *, allow
+    p, role:admin, projects, *, *, allow
+
+    # Developer role
+    p, role:developer, applications, get, */*, allow
+    p, role:developer, applications, sync, */dev/*, allow
+    p, role:developer, applications, sync, */staging/*, allow
+    p, role:developer, applications, update, */dev/*, allow
+    p, role:developer, repositories, get, *, allow
+
+    # Operations role
+    p, role:operations, applications, *, */*, allow
+    p, role:operations, clusters, get, *, allow
+    p, role:operations, repositories, get, *, allow
+
+    # Assign admin role to admin group
+    g, admin, role:admin
+    g, developer, role:developer
+    g, operations, role:operations

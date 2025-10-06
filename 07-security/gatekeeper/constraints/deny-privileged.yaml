@@ -1,0 +1,22 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sDenyPrivileged
+metadata:
+  name: deny-privileged-containers
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: ["apps"]
+        kinds: ["Deployment", "StatefulSet", "DaemonSet"]
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces:
+      - "user-service"
+      - "auth-service"
+      - "notification-service"
+      - "analytics-service"
+      - "frontend"
+  parameters:
+    exemptImages:
+      - "fluent/fluent-bit*"  # Fluent Bit needs privileged for log access
+      - "falcosecurity/falco*"  # Falco needs privileged for kernel module

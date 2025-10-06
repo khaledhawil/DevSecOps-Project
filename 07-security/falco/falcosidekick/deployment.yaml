@@ -1,0 +1,168 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: falcosidekick-config
+  namespace: falco
+data:
+  config.yaml: |
+    # Falcosidekick Configuration
+    # Alert forwarding and routing
+    
+    listenaddress: "0.0.0.0"
+    listenport: 2801
+    
+    debug: false
+    
+    customfields:
+      environment: "production"
+      cluster: "devsecops-cluster"
+    
+    # Slack Output
+    slack:
+      webhookurl: "${SLACK_WEBHOOK_URL}"
+      footer: "https://github.com/falcosecurity/falcosidekick"
+      icon: "https://raw.githubusercontent.com/falcosecurity/falcosidekick/master/imgs/falcosidekick_color.png"
+      username: "Falco"
+      outputformat: "all"
+      minimumpriority: "warning"
+      messageformat: "Alert from Falco"
+    
+    # PagerDuty Output
+    pagerduty:
+      routingkey: "${PAGERDUTY_ROUTING_KEY}"
+      minimumpriority: "error"
+    
+    # Elasticsearch Output
+    elasticsearch:
+      hostport: "http://elasticsearch:9200"
+      index: "falco"
+      type: "event"
+      minimumpriority: "debug"
+      suffix: "daily"
+    
+    # Prometheus Exporter
+    prometheus:
+      extralabels: "product:falco,environment:production"
+    
+    # Webhook Output
+    webhook:
+      address: "http://alertmanager.monitoring.svc:9093/api/v1/alerts"
+      minimumpriority: "warning"
+    
+    # Loki Output
+    loki:
+      hostport: "http://loki:3100"
+      endpoint: "/loki/api/v1/push"
+      extralabels: "component:security"
+      minimumpriority: "debug"
+    
+    # AWS CloudWatch Logs
+    cloudwatchlogs:
+      loggroup: "/aws/eks/devsecops/falco"
+      logstream: "falco-alerts"
+      minimumpriority: "warning"
+      # region: "us-east-1"
+    
+    # AWS SNS
+    sns:
+      # topicarn: "arn:aws:sns:us-east-1:123456789012:falco-alerts"
+      # rawjson: true
+      minimumpriority: "critical"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: falcosidekick
+  namespace: falco
+  labels:
+    app: falcosidekick
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: falcosidekick
+  template:
+    metadata:
+      labels:
+        app: falcosidekick
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "2801"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: falco
+      containers:
+      - name: falcosidekick
+        image: falcosecurity/falcosidekick:2.28.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 2801
+          protocol: TCP
+        env:
+        - name: SLACK_WEBHOOKURL
+          valueFrom:
+            secretKeyRef:
+              name: falcosidekick-secrets
+              key: slack-webhook-url
+              optional: true
+        - name: PAGERDUTY_ROUTINGKEY
+          valueFrom:
+            secretKeyRef:
+              name: falcosidekick-secrets
+              key: pagerduty-routing-key
+              optional: true
+        livenessProbe:
+          httpGet:
+            path: /ping
+            port: 2801
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ping
+            port: 2801
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1234
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: falcosidekick
+  namespace: falco
+  labels:
+    app: falcosidekick
+spec:
+  type: ClusterIP
+  selector:
+    app: falcosidekick
+  ports:
+    - name: http
+      port: 2801
+      targetPort: 2801
+      protocol: TCP
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: falcosidekick-secrets
+  namespace: falco
+type: Opaque
+stringData:
+  slack-webhook-url: "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
+  pagerduty-routing-key: "YOUR_PAGERDUTY_ROUTING_KEY"

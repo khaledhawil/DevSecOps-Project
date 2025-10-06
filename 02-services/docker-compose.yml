@@ -1,0 +1,366 @@
+version: '3.9'
+
+################################################################################
+# DevSecOps Platform - Docker Compose Configuration
+################################################################################
+#
+# Purpose: Local development environment for all microservices
+# 
+# Services:
+#   - PostgreSQL: Primary database
+#   - Redis: Caching and sessions
+#   - Frontend: React application
+#   - User Service: Go microservice
+#   - Auth Service: Node.js microservice
+#   - Notification Service: Python microservice
+#   - Analytics Service: Java microservice
+#
+# Usage:
+#   docker-compose up -d          # Start all services
+#   docker-compose logs -f        # View logs
+#   docker-compose down           # Stop all services
+#   docker-compose ps             # Check service status
+#
+################################################################################
+
+services:
+
+  ############################################################################
+  # Infrastructure Services
+  ############################################################################
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: devsecops-postgres
+    hostname: postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+      POSTGRES_DB: devsecops
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - devsecops-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: devsecops-redis
+    hostname: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass redis123
+    volumes:
+      - redis_data:/data
+    networks:
+      - devsecops-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ############################################################################
+  # Backend Services
+  ############################################################################
+
+  # User Service (Go)
+  user-service:
+    build:
+      context: ./user-service
+      dockerfile: Dockerfile.dev
+    container_name: user-service
+    hostname: user-service
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      # Service Configuration
+      PORT: 8081
+      SERVICE_NAME: user-service
+      ENVIRONMENT: development
+      LOG_LEVEL: debug
+      
+      # Database Configuration
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: devsecops
+      DB_USER: postgres
+      DB_PASSWORD: postgres123
+      DB_SSL_MODE: disable
+      
+      # Redis Configuration
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: redis123
+      
+      # JWT Configuration
+      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_EXPIRATION: 3600
+    volumes:
+      - ./user-service:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - devsecops-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Auth Service (Node.js)
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile.dev
+    container_name: auth-service
+    hostname: auth-service
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      # Service Configuration
+      PORT: 8082
+      SERVICE_NAME: auth-service
+      NODE_ENV: development
+      LOG_LEVEL: debug
+      
+      # Database Configuration
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: devsecops
+      DB_USER: postgres
+      DB_PASSWORD: postgres123
+      DB_SSL: false
+      
+      # Redis Configuration
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: redis123
+      
+      # JWT Configuration
+      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_ACCESS_EXPIRATION: 900
+      JWT_REFRESH_EXPIRATION: 86400
+      
+      # Security
+      BCRYPT_ROUNDS: 10
+      RATE_LIMIT_WINDOW: 900000
+      RATE_LIMIT_MAX: 100
+    volumes:
+      - ./auth-service:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - devsecops-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Notification Service (Python)
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile.dev
+    container_name: notification-service
+    hostname: notification-service
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+    environment:
+      # Service Configuration
+      PORT: 8083
+      SERVICE_NAME: notification-service
+      FLASK_ENV: development
+      FLASK_DEBUG: 1
+      LOG_LEVEL: DEBUG
+      
+      # Database Configuration
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: devsecops
+      DB_USER: postgres
+      DB_PASSWORD: postgres123
+      
+      # Redis/Celery Configuration
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: redis123
+      CELERY_BROKER_URL: redis://:redis123@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:redis123@redis:6379/0
+      
+      # Email Configuration (for development)
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      SMTP_USER: ""
+      SMTP_PASSWORD: ""
+      SMTP_FROM: noreply@devsecops.local
+    volumes:
+      - ./notification-service:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - devsecops-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8083/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Analytics Service (Java)
+  analytics-service:
+    build:
+      context: ./analytics-service
+      dockerfile: Dockerfile.dev
+    container_name: analytics-service
+    hostname: analytics-service
+    restart: unless-stopped
+    ports:
+      - "8084:8084"
+    environment:
+      # Service Configuration
+      SERVER_PORT: 8084
+      SPRING_APPLICATION_NAME: analytics-service
+      SPRING_PROFILES_ACTIVE: dev
+      
+      # Database Configuration
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/devsecops
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres123
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_SHOW_SQL: true
+      
+      # Redis Configuration
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_REDIS_PASSWORD: redis123
+      
+      # JWT Configuration
+      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_EXPIRATION: 3600000
+      
+      # Logging
+      LOGGING_LEVEL_ROOT: INFO
+      LOGGING_LEVEL_COM_DEVSECOPS: DEBUG
+    volumes:
+      - ./analytics-service:/app
+      - maven_cache:/root/.m2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - devsecops-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8084/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  ############################################################################
+  # Frontend
+  ############################################################################
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: frontend
+    hostname: frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Service URLs
+      REACT_APP_USER_SERVICE_URL: http://localhost:8081
+      REACT_APP_AUTH_SERVICE_URL: http://localhost:8082
+      REACT_APP_NOTIFICATION_SERVICE_URL: http://localhost:8083
+      REACT_APP_ANALYTICS_SERVICE_URL: http://localhost:8084
+      
+      # Development
+      CHOKIDAR_USEPOLLING: true
+      WATCHPACK_POLLING: true
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - user-service
+      - auth-service
+      - notification-service
+      - analytics-service
+    networks:
+      - devsecops-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  ############################################################################
+  # Development Tools
+  ############################################################################
+
+  # MailHog (Email testing)
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: mailhog
+    hostname: mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - devsecops-network
+
+################################################################################
+# Networks
+################################################################################
+
+networks:
+  devsecops-network:
+    name: devsecops-network
+    driver: bridge
+
+################################################################################
+# Volumes
+################################################################################
+
+volumes:
+  postgres_data:
+    name: devsecops-postgres-data
+  redis_data:
+    name: devsecops-redis-data
+  maven_cache:
+    name: devsecops-maven-cache

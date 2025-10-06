@@ -1,0 +1,114 @@
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8scontainerlimits
+  annotations:
+    description: "Requires containers to have memory and CPU limits set and constrain limits to be within the specified maximum values."
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sContainerLimits
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            cpu:
+              description: "Maximum CPU limit for a container"
+              type: string
+            memory:
+              description: "Maximum memory limit for a container"
+              type: string
+            exemptImages:
+              description: "Images that are exempt from the policy"
+              type: array
+              items:
+                type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8scontainerlimits
+
+        import data.lib.exempt_container.is_exempt
+
+        missing_limits(container) {
+          not container.resources.limits
+        }
+
+        missing_limits(container) {
+          not container.resources.limits.memory
+        }
+
+        missing_limits(container) {
+          not container.resources.limits.cpu
+        }
+
+        canonify_cpu(orig) = new {
+          is_number(orig)
+          new := orig * 1000
+        }
+
+        canonify_cpu(orig) = new {
+          not is_number(orig)
+          endswith(orig, "m")
+          new := to_number(replace(orig, "m", ""))
+        }
+
+        canonify_cpu(orig) = new {
+          not is_number(orig)
+          not endswith(orig, "m")
+          regex.match("^[0-9]+$", orig)
+          new := to_number(orig) * 1000
+        }
+
+        canonify_mem(orig) = new {
+          is_number(orig)
+          new := orig
+        }
+
+        canonify_mem(orig) = new {
+          not is_number(orig)
+          endswith(orig, "Ki")
+          new := to_number(replace(orig, "Ki", "")) * 1024
+        }
+
+        canonify_mem(orig) = new {
+          not is_number(orig)
+          endswith(orig, "Mi")
+          new := to_number(replace(orig, "Mi", "")) * 1024 * 1024
+        }
+
+        canonify_mem(orig) = new {
+          not is_number(orig)
+          endswith(orig, "Gi")
+          new := to_number(replace(orig, "Gi", "")) * 1024 * 1024 * 1024
+        }
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          not is_exempt(container)
+          missing_limits(container)
+          msg := sprintf("container <%v> does not have CPU and memory limits defined", [container.name])
+        }
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          not is_exempt(container)
+          cpu_orig := container.resources.limits.cpu
+          cpu := canonify_cpu(cpu_orig)
+          max_cpu_orig := input.parameters.cpu
+          max_cpu := canonify_cpu(max_cpu_orig)
+          cpu > max_cpu
+          msg := sprintf("container <%v> cpu limit <%v> is higher than the maximum allowed of <%v>", [container.name, cpu_orig, max_cpu_orig])
+        }
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          not is_exempt(container)
+          mem_orig := container.resources.limits.memory
+          mem := canonify_mem(mem_orig)
+          max_mem_orig := input.parameters.memory
+          max_mem := canonify_mem(max_mem_orig)
+          mem > max_mem
+          msg := sprintf("container <%v> memory limit <%v> is higher than the maximum allowed of <%v>", [container.name, mem_orig, max_mem_orig])
+        }

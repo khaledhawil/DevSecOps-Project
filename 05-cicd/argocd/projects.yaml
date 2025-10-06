@@ -1,0 +1,71 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: devsecops-dev
+  namespace: argocd
+spec:
+  description: DevSecOps Development Environment
+  sourceRepos:
+    - https://github.com/khaledhawil/DevSecOps-Project.git
+  destinations:
+    - namespace: devsecops-dev
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  orphanedResources:
+    warn: true
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: devsecops-staging
+  namespace: argocd
+spec:
+  description: DevSecOps Staging Environment
+  sourceRepos:
+    - https://github.com/khaledhawil/DevSecOps-Project.git
+  destinations:
+    - namespace: devsecops-staging
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  orphanedResources:
+    warn: true
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: devsecops-prod
+  namespace: argocd
+spec:
+  description: DevSecOps Production Environment
+  sourceRepos:
+    - https://github.com/khaledhawil/DevSecOps-Project.git
+  destinations:
+    - namespace: devsecops-prod
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  orphanedResources:
+    warn: true
+  syncWindows:
+    - kind: allow
+      schedule: '0 9-17 * * 1-5'
+      duration: 8h
+      applications:
+        - '*'
+      manualSync: true
