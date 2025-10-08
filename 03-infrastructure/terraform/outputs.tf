@@ -93,9 +93,14 @@ output "rds_port" {
 }
 
 # ElastiCache Outputs
-output "redis_endpoint" {
-  description = "ElastiCache Redis endpoint"
-  value       = module.elasticache.endpoint
+output "redis_primary_endpoint" {
+  description = "ElastiCache Redis primary endpoint"
+  value       = module.elasticache.primary_endpoint_address
+}
+
+output "redis_reader_endpoint" {
+  description = "ElastiCache Redis reader endpoint"
+  value       = module.elasticache.reader_endpoint_address
 }
 
 output "redis_port" {
@@ -103,9 +108,9 @@ output "redis_port" {
   value       = module.elasticache.port
 }
 
-output "redis_cluster_id" {
-  description = "ElastiCache cluster ID"
-  value       = module.elasticache.cluster_id
+output "redis_replication_group_id" {
+  description = "ElastiCache replication group ID"
+  value       = module.elasticache.replication_group_id
 }
 
 # Security Outputs
@@ -161,4 +166,60 @@ output "environment" {
 output "configure_kubectl" {
   description = "Command to configure kubectl"
   value       = "aws eks update-kubeconfig --name ${module.eks.cluster_name} --region ${var.aws_region}"
+}
+
+# Jenkins Outputs
+output "jenkins_instance_id" {
+  description = "Jenkins EC2 instance ID"
+  value       = module.jenkins.jenkins_instance_id
+}
+
+output "jenkins_public_ip" {
+  description = "Jenkins public IP address"
+  value       = module.jenkins.jenkins_public_ip
+}
+
+output "jenkins_private_ip" {
+  description = "Jenkins private IP address"
+  value       = module.jenkins.jenkins_private_ip
+}
+
+output "jenkins_url" {
+  description = "Jenkins access URL"
+  value       = module.jenkins.jenkins_url
+}
+
+output "jenkins_ssh_command" {
+  description = "SSH command to connect to Jenkins"
+  value       = module.jenkins.jenkins_ssh_command
+}
+
+output "jenkins_private_key_path" {
+  description = "Path to Jenkins SSH private key"
+  value       = module.jenkins.jenkins_private_key_path
+}
+
+output "jenkins_setup_complete" {
+  description = "Instructions to access Jenkins"
+  value = <<-EOT
+    ========================================
+    Jenkins Deployment Complete!
+    ========================================
+    
+    Jenkins URL: ${module.jenkins.jenkins_url}
+    SSH Command: ${module.jenkins.jenkins_ssh_command}
+    Private Key: ${module.jenkins.jenkins_private_key_path}
+    
+    To get initial admin password:
+    ssh -i ${module.jenkins.jenkins_private_key_path} ec2-user@${module.jenkins.jenkins_public_ip} 'sudo cat /var/lib/jenkins/secrets/initialAdminPassword'
+    
+    Next steps:
+    1. Wait 2-3 minutes for EC2 to fully boot
+    2. Run Ansible playbook to configure Jenkins:
+       cd ../ansible
+       ./deploy-jenkins.sh dev
+    
+    Or manually configure Jenkins by accessing the URL above.
+    ========================================
+  EOT
 }

@@ -1,0 +1,291 @@
+# ==========================================
+# DevSecOps Project - Git Ignore Rules
+# ==========================================
+
+# ==========================================
+# Terraform - Infrastructure Files
+# ==========================================
+# Terraform state files (NEVER commit these - contain sensitive data)
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Terraform plan files (can contain sensitive output)
+*.tfplan
+*.tfplan.*
+
+# Terraform variable files with secrets
+*.tfvars.secret
+*secret.tfvars
+terraform.tfvars
+
+# Terraform plugins and modules
+.terraform/
+.terraform.lock.hcl
+
+# Terraform crash logs
+crash.log
+crash.*.log
+
+# ==========================================
+# Kubernetes Secrets & Configs
+# ==========================================
+# Kubernetes secret files (NEVER commit raw secrets)
+*-secret.yaml
+*-secrets.yaml
+secret-*.yaml
+secrets-*.yaml
+
+# Kubeconfig files with cluster access
+kubeconfig
+*.kubeconfig
+kube-config
+
+# ==========================================
+# AWS & Cloud Credentials
+# ==========================================
+# AWS credentials
+.aws/
+*.pem
+*.key
+*.crt
+*-key.json
+credentials
+*.credentials
+
+# Cloud provider configs with sensitive data
+.gcloud/
+.azure/
+
+# ==========================================
+# Docker & Container Files
+# ==========================================
+# Docker override files for local development
+docker-compose.override.yml
+docker-compose.local.yml
+.dockerignore.local
+
+# ==========================================
+# Node.js / JavaScript / TypeScript
+# ==========================================
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.nuxt/
+.cache/
+
+# Testing
+coverage/
+.nyc_output/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ==========================================
+# Python
+# ==========================================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# Distribution / packaging
+.Python
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# pytest
+.pytest_cache/
+.tox/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# ==========================================
+# Go
+# ==========================================
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+pkg/
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Vendor directory
+vendor/
+
+# Go workspace file
+go.work
+
+# ==========================================
+# Java / Maven / Spring Boot
+# ==========================================
+# Compiled class files
+*.class
+target/
+.mvn/
+*.jar
+*.war
+*.ear
+
+# Maven
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+dependency-reduced-pom.xml
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+
+# ==========================================
+# Jenkins & CI/CD
+# ==========================================
+# Jenkins workspace
+.jenkins/
+jenkins-workspace/
+
+# CI/CD temporary files
+.gitlab-ci-local/
+.github-actions-local/
+
+# ==========================================
+# Logs & Temporary Files
+# ==========================================
+# Application logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+*.swo
+
+# ==========================================
+# Backups & Archives
+# ==========================================
+# Database backups (too large for git)
+*.sql
+*.dump
+*.backup
+backups/
+
+# Archive files
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+
+# ==========================================
+# Security & Scanning Tools
+# ==========================================
+# Trivy scan results
+trivy-results/
+*.trivy
+
+# SonarQube
+.scannerwork/
+.sonar/
+
+# Vault temporary files
+.vault-token
+
+# ==========================================
+# Database Files
+# ==========================================
+# Local database files
+*.db
+*.sqlite
+*.sqlite3
+
+# ==========================================
+# Monitoring & Observability
+# ==========================================
+# Prometheus data
+prometheus-data/
+alertmanager-data/
+
+# Grafana data
+grafana-data/
+
+# ==========================================
+# OS-Specific Files
+# ==========================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux
+*~
+.directory
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ==========================================
+# Project-Specific Exclusions
+# ==========================================
+# Local development scripts
+*.local.sh
+local-*.sh
+
+# Personal notes and TODO files
+NOTES.md
+TODO.local.md
+.scratch/
+
+# Large documentation artifacts
+*.pdf
+*.docx

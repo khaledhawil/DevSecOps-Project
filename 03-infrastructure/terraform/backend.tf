@@ -1,10 +1,10 @@
 terraform {
   backend "s3" {
-    bucket         = "devsecops-terraform-state"
+    bucket         = "devsecops-terraform-state-2001"
     key            = "terraform.tfstate"
     region         = "us-east-1"
     encrypt        = true
-    dynamodb_table = "terraform-state-lock"
+    dynamodb_table = "terraform-state-2001-lock"
     
     # Uncomment to use workspace-based state files
     # key = "environments/${terraform.workspace}/terraform.tfstate"

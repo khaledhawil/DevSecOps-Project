@@ -7,7 +7,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production
+RUN npm install --production
 
 # Copy source code
 COPY . .
@@ -18,9 +18,9 @@ FROM node:18-alpine
 # Install wget for health checks
 RUN apk add --no-cache wget
 
-# Create non-root user
-RUN addgroup -g 1000 appuser && \
-    adduser -D -u 1000 -G appuser appuser
+# Create non-root user (use different GID to avoid conflicts)
+RUN addgroup -g 10001 appuser && \
+    adduser -D -u 10001 -G appuser appuser
 
 WORKDIR /app
 

@@ -24,8 +24,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN useradd -m -u 1000 appuser
+# Create non-root user (use different UID to avoid conflicts)
+RUN useradd -m -u 10001 appuser
 
 WORKDIR /app
 

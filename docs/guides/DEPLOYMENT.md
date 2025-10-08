@@ -1,4 +1,4 @@
-# Infrastructure Deployment Guide
+dd# Infrastructure Deployment Guide
 
 This guide provides step-by-step instructions for deploying the DevSecOps infrastructure to AWS using Terraform.
 
@@ -66,17 +66,17 @@ Before initializing Terraform, you need to create the S3 bucket and DynamoDB tab
 ```bash
 # Create S3 bucket for Terraform state
 aws s3api create-bucket \
-  --bucket devsecops-terraform-state \
+  --bucket devsecops-terraform-state-2001 \
   --region us-east-1
 
 # Enable versioning
 aws s3api put-bucket-versioning \
-  --bucket devsecops-terraform-state \
+  --bucket devsecops-terraform-state-2001 \
   --versioning-configuration Status=Enabled
 
 # Enable encryption
 aws s3api put-bucket-encryption \
-  --bucket devsecops-terraform-state \
+  --bucket devsecops-terraform-state-2001 \
   --server-side-encryption-configuration '{
     "Rules": [{
       "ApplyServerSideEncryptionByDefault": {
@@ -85,9 +85,9 @@ aws s3api put-bucket-encryption \
     }]
   }'
 
-# Create DynamoDB table for state locking
+# Create DynamoDB table for state-2001 locking
 aws dynamodb create-table \
-  --table-name terraform-state-lock \
+  --table-name terraform-state-2001-lock \
   --attribute-definitions AttributeName=LockID,AttributeType=S \
   --key-schema AttributeName=LockID,KeyType=HASH \
   --billing-mode PAY_PER_REQUEST \
@@ -276,8 +276,8 @@ aws cloudwatch describe-alarms --alarm-name-prefix devsecops
 
 **Solution**: Ensure the S3 bucket and DynamoDB table exist:
 ```bash
-aws s3 ls s3://devsecops-terraform-state
-aws dynamodb describe-table --table-name terraform-state-lock
+aws s3 ls s3://devsecops-terraform-state-2001
+aws dynamodb describe-table --table-name terraform-state-2001-lock
 ```
 
 ### Issue: EKS Cluster Not Accessible
@@ -316,10 +316,10 @@ terraform apply
 
 ### Issue: State Lock
 
-**Solution**: If state is locked, check DynamoDB:
+**Solution**: If state-2001 is locked, check DynamoDB:
 ```bash
 # List locks
-aws dynamodb scan --table-name terraform-state-lock
+aws dynamodb scan --table-name terraform-state-2001-lock
 
 # Force unlock (use with caution)
 terraform force-unlock <lock-id>
@@ -361,11 +361,11 @@ After destroying all environments:
 
 ```bash
 # Delete DynamoDB table
-aws dynamodb delete-table --table-name terraform-state-lock
+aws dynamodb delete-table --table-name terraform-state-2001-lock
 
 # Empty and delete S3 bucket
-aws s3 rm s3://devsecops-terraform-state --recursive
-aws s3api delete-bucket --bucket devsecops-terraform-state
+aws s3 rm s3://devsecops-terraform-state-2001 --recursive
+aws s3api delete-bucket --bucket devsecops-terraform-state-2001
 ```
 
 ## Cost Estimation

@@ -1,0 +1,160 @@
+---
+jenkins:
+  systemMessage: "Jenkins Server - {{ environment }} Environment"
+  numExecutors: 2
+  mode: NORMAL
+  scmCheckoutRetryCount: 2
+  disableRememberMe: false
+  
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "{{ jenkins_admin_username }}"
+          password: "{{ jenkins_admin_password }}"
+  
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+  
+  remotingSecurity:
+    enabled: true
+  
+  clouds:
+    - kubernetes:
+        name: "kubernetes"
+        serverUrl: "https://kubernetes.default"
+        skipTlsVerify: true
+        namespace: "jenkins"
+        jenkinsUrl: "http://jenkins:8080"
+        jenkinsTunnel: "jenkins-agent:50000"
+        containerCapStr: "10"
+        connectTimeout: 0
+        readTimeout: 0
+        retentionTimeout: 5
+        maxRequestsPerHostStr: 32
+        templates:
+          - name: "jenkins-agent"
+            namespace: "jenkins"
+            label: "jenkins-agent"
+            nodeUsageMode: NORMAL
+            containers:
+              - name: "jnlp"
+                image: "jenkins/inbound-agent:latest"
+                alwaysPullImage: true
+                workingDir: "/home/jenkins/agent"
+                command: ""
+                args: ""
+                ttyEnabled: true
+                resourceRequestCpu: "500m"
+                resourceRequestMemory: "512Mi"
+                resourceLimitCpu: "1000m"
+                resourceLimitMemory: "1Gi"
+
+security:
+  globalJobDslSecurityConfiguration:
+    useScriptSecurity: false
+  
+  gitHostKeyVerificationConfiguration:
+    sshHostKeyVerificationStrategy: "noHostKeyVerificationStrategy"
+
+unclassified:
+  location:
+    url: "http://{{ ansible_default_ipv4.address }}:{{ jenkins_port }}/"
+    adminAddress: "admin@example.com"
+  
+  timestamper:
+    allPipelines: true
+  
+  buildDiscarders:
+    configuredBuildDiscarders:
+      - "jobBuildDiscarder"
+      
+  globalLibraries:
+    libraries:
+      - name: "shared-library"
+        defaultVersion: "master"
+        implicit: false
+        allowVersionOverride: true
+        includeInChangesets: true
+        retriever:
+          modernSCM:
+            scm:
+              git:
+                remote: "https://github.com/your-org/jenkins-shared-library.git"
+
+tool:
+  git:
+    installations:
+      - name: "Default"
+        home: "/usr/bin/git"
+  
+  maven:
+    installations:
+      - name: "Maven 3.9"
+        properties:
+          - installSource:
+              installers:
+                - maven:
+                    id: "3.9.6"
+  
+  jdk:
+    installations:
+      - name: "Java 11"
+        home: "/usr/lib/jvm/java-11-amazon-corretto"
+  
+  dockerTool:
+    installations:
+      - name: "docker"
+        properties:
+          - installSource:
+              installers:
+                - fromDocker:
+                    version: "latest"
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - usernamePassword:
+              scope: GLOBAL
+              id: "github-credentials"
+              username: "${GITHUB_USERNAME}"
+              password: "${GITHUB_TOKEN}"
+              description: "GitHub credentials"
+          
+          - aws:
+              scope: GLOBAL
+              id: "aws-credentials"
+              description: "AWS credentials"
+              accessKey: "${AWS_ACCESS_KEY_ID}"
+              secretKey: "${AWS_SECRET_ACCESS_KEY}"
+          
+          - string:
+              scope: GLOBAL
+              id: "slack-token"
+              secret: "${SLACK_TOKEN}"
+              description: "Slack notification token"
+
+jobs:
+  - script: >
+      folder('DevSecOps') {
+        displayName('DevSecOps Projects')
+        description('DevSecOps CI/CD Pipelines')
+      }
+  
+  - script: >
+      multibranchPipelineJob('DevSecOps/microservices-pipeline') {
+        branchSources {
+          git {
+            id('microservices')
+            remote('https://github.com/your-org/microservices.git')
+            credentialsId('github-credentials')
+          }
+        }
+        orphanedItemStrategy {
+          discardOldItems {
+            numToKeep(20)
+          }
+        }
+      }

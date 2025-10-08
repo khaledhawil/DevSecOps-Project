@@ -87,6 +87,12 @@ variable "eks_node_max_size" {
   default     = 6
 }
 
+variable "eks_node_disk_size" {
+  description = "Disk size in GiB for EKS nodes"
+  type        = number
+  default     = 50
+}
+
 # RDS Configuration
 variable "rds_instance_class" {
   description = "Instance class for RDS"
@@ -98,6 +104,12 @@ variable "rds_allocated_storage" {
   description = "Allocated storage for RDS in GB"
   type        = number
   default     = 100
+}
+
+variable "rds_max_allocated_storage" {
+  description = "Maximum allocated storage for RDS autoscaling in GB"
+  type        = number
+  default     = 200
 }
 
 variable "rds_engine_version" {
@@ -174,6 +186,12 @@ variable "log_retention_days" {
   default     = 30
 }
 
+variable "alarm_email" {
+  description = "Email address for CloudWatch alarm notifications"
+  type        = string
+  default     = "alerts@example.com"
+}
+
 # Security Configuration
 variable "allowed_cidr_blocks" {
   description = "CIDR blocks allowed to access resources"
@@ -185,6 +203,43 @@ variable "enable_vpc_flow_logs" {
   description = "Enable VPC flow logs"
   type        = bool
   default     = true
+}
+
+# Jenkins Configuration
+variable "jenkins_instance_type" {
+  description = "EC2 instance type for Jenkins"
+  type        = string
+  default     = "t3.medium"
+}
+
+variable "jenkins_root_volume_size" {
+  description = "Size of Jenkins root volume in GB"
+  type        = number
+  default     = 30
+}
+
+variable "jenkins_data_volume_size" {
+  description = "Size of Jenkins data volume in GB"
+  type        = number
+  default     = 50
+}
+
+variable "jenkins_allowed_ssh_cidr_blocks" {
+  description = "CIDR blocks allowed to SSH to Jenkins"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
+variable "jenkins_allowed_cidr_blocks" {
+  description = "CIDR blocks allowed to access Jenkins web interface"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
+variable "jenkins_artifacts_bucket" {
+  description = "S3 bucket name for Jenkins artifacts"
+  type        = string
+  default     = "jenkins-artifacts"
 }
 
 # Tags

@@ -1,0 +1,46 @@
+#!/bin/bash
+# Jenkins Backup Script
+
+BACKUP_DIR="/backup/jenkins"
+JENKINS_HOME="{{ jenkins_home }}"
+DATE=$(date +%Y%m%d_%H%M%S)
+BACKUP_FILE="jenkins_backup_${DATE}.tar.gz"
+S3_BUCKET="{{ jenkins_artifacts_bucket | default('jenkins-backups', true) }}"
+
+# Create backup directory
+mkdir -p ${BACKUP_DIR}
+
+# Create backup
+echo "Starting Jenkins backup..."
+tar -czf ${BACKUP_DIR}/${BACKUP_FILE} \
+    --exclude='${JENKINS_HOME}/war' \
+    --exclude='${JENKINS_HOME}/cache' \
+    --exclude='${JENKINS_HOME}/tools' \
+    --exclude='${JENKINS_HOME}/workspace/*/workspace' \
+    ${JENKINS_HOME}
+
+# Upload to S3 if AWS CLI is configured
+if command -v aws &> /dev/null; then
+    echo "Uploading backup to S3..."
+    aws s3 cp ${BACKUP_DIR}/${BACKUP_FILE} s3://${S3_BUCKET}/backups/
+    
+    if [ $? -eq 0 ]; then
+        echo "Backup uploaded successfully to S3"
+        # Keep only last 7 days of local backups
+        find ${BACKUP_DIR} -name "jenkins_backup_*.tar.gz" -mtime +7 -delete
+    else
+        echo "Failed to upload backup to S3"
+    fi
+else
+    echo "AWS CLI not found, skipping S3 upload"
+fi
+
+# Keep only last 30 days of backups in S3
+if command -v aws &> /dev/null; then
+    aws s3 ls s3://${S3_BUCKET}/backups/ | \
+        awk '{print $4}' | \
+        head -n -30 | \
+        xargs -I {} aws s3 rm s3://${S3_BUCKET}/backups/{}
+fi
+
+echo "Backup completed: ${BACKUP_FILE}"

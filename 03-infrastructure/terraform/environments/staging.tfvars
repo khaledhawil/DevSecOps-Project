@@ -20,23 +20,23 @@ eks_node_min_size      = 2
 eks_node_max_size      = 6
 
 # RDS Configuration
-rds_engine_version          = "15.4"
+rds_engine_version          = "15.7"
 rds_instance_class          = "db.t3.medium"
 rds_allocated_storage       = 100
 rds_max_allocated_storage   = 200
 rds_multi_az                = true
 rds_backup_retention_period = 7
 rds_database_name           = "devsecops_staging"
-rds_master_username         = "dbadmin"
+rds_username                = "dbadmin"
 
 # ElastiCache Configuration
-redis_engine_version = "7.0"
-redis_node_type      = "cache.t3.medium"
-redis_num_nodes      = 2
+redis_engine_version   = "7.0"
+redis_node_type        = "cache.t3.medium"
+redis_num_cache_nodes  = 2
 
 # Monitoring Configuration
-cloudwatch_log_retention = 14
-alarm_email              = "devops-team@example.com"
+log_retention_days = 14
+alarm_email        = "devops-team@example.com"
 
 # Security Configuration
 allowed_cidr_blocks = ["10.0.0.0/8"]

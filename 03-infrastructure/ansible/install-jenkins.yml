@@ -1,0 +1,265 @@
+---
+- name: Install and Configure Jenkins
+  hosts: jenkins
+  become: yes
+  vars:
+    jenkins_version: "2.426.3"
+    jenkins_port: 8080
+    jenkins_home: "/var/lib/jenkins"
+    jenkins_admin_username: "admin"
+    jenkins_admin_password: "{{ lookup('env', 'JENKINS_ADMIN_PASSWORD') | default('Admin@123', true) }}"
+    jenkins_plugins:
+      - git
+      - github
+      - github-branch-source
+      - workflow-aggregator
+      - pipeline-stage-view
+      - docker-workflow
+      - docker-plugin
+      - kubernetes
+      - kubernetes-cli
+      - kubernetes-credentials
+      - configuration-as-code
+      - job-dsl
+      - credentials-binding
+      - aws-credentials
+      - amazon-ecr
+      - slack
+      - email-ext
+      - sonarqube-scanner
+      - ansible
+      - terraform
+      - prometheus
+      - blueocean
+      - git-parameter
+      - parameterized-trigger
+      - build-timeout
+      - timestamper
+      - ws-cleanup
+      - matrix-auth
+
+  tasks:
+    - name: Wait for system to be ready
+      wait_for:
+        path: /tmp/ansible-ready
+        state: present
+        timeout: 300
+
+    - name: Update system packages
+      yum:
+        name: '*'
+        state: latest
+        update_cache: yes
+
+    - name: Install required packages
+      yum:
+        name:
+          - java-11-amazon-corretto
+          - git
+          - wget
+          - curl
+          - unzip
+          - docker
+        state: present
+
+    - name: Start and enable Docker
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add Jenkins user to docker group
+      user:
+        name: jenkins
+        groups: docker
+        append: yes
+
+    - name: Add Jenkins repository
+      get_url:
+        url: https://pkg.jenkins.io/redhat-stable/jenkins.repo
+        dest: /etc/yum.repos.d/jenkins.repo
+        mode: '0644'
+
+    - name: Import Jenkins GPG key
+      rpm_key:
+        key: https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+        state: present
+
+    - name: Install Jenkins
+      yum:
+        name: jenkins
+        state: present
+
+    - name: Ensure Jenkins home directory exists
+      file:
+        path: "{{ jenkins_home }}"
+        state: directory
+        owner: jenkins
+        group: jenkins
+        mode: '0755'
+
+    - name: Configure Jenkins defaults
+      template:
+        src: templates/jenkins_defaults.j2
+        dest: /etc/sysconfig/jenkins
+        owner: root
+        group: root
+        mode: '0644'
+      notify: restart jenkins
+
+    - name: Start and enable Jenkins service
+      systemd:
+        name: jenkins
+        state: started
+        enabled: yes
+
+    - name: Wait for Jenkins to start
+      wait_for:
+        port: "{{ jenkins_port }}"
+        delay: 10
+        timeout: 300
+
+    - name: Get Jenkins initial admin password
+      slurp:
+        src: "{{ jenkins_home }}/secrets/initialAdminPassword"
+      register: jenkins_initial_password
+      failed_when: false
+
+    - name: Display initial admin password
+      debug:
+        msg: "Jenkins initial admin password: {{ jenkins_initial_password.content | b64decode }}"
+      when: jenkins_initial_password is succeeded
+
+    - name: Wait for Jenkins to be fully up
+      uri:
+        url: "http://localhost:{{ jenkins_port }}"
+        status_code: 200,403
+        timeout: 5
+      register: jenkins_service_status
+      retries: 60
+      delay: 5
+      until: jenkins_service_status is succeeded
+
+    - name: Create Jenkins CLI directory
+      file:
+        path: /opt/jenkins-cli
+        state: directory
+        mode: '0755'
+
+    - name: Download Jenkins CLI
+      get_url:
+        url: "http://localhost:{{ jenkins_port }}/jnlpJars/jenkins-cli.jar"
+        dest: /opt/jenkins-cli/jenkins-cli.jar
+        mode: '0644'
+      retries: 5
+      delay: 10
+
+    - name: Install Jenkins plugins
+      shell: |
+        java -jar /opt/jenkins-cli/jenkins-cli.jar -s http://localhost:{{ jenkins_port }}/ \
+        -auth admin:$(cat {{ jenkins_home }}/secrets/initialAdminPassword) \
+        install-plugin {{ item }} -restart
+      loop: "{{ jenkins_plugins }}"
+      args:
+        creates: "{{ jenkins_home }}/plugins/{{ item }}.jpi"
+      ignore_errors: yes
+
+    - name: Create Jenkins configuration directory
+      file:
+        path: "{{ jenkins_home }}/init.groovy.d"
+        state: directory
+        owner: jenkins
+        group: jenkins
+        mode: '0755'
+
+    - name: Configure Jenkins security
+      template:
+        src: templates/basic-security.groovy.j2
+        dest: "{{ jenkins_home }}/init.groovy.d/basic-security.groovy"
+        owner: jenkins
+        group: jenkins
+        mode: '0644'
+      notify: restart jenkins
+
+    - name: Create JCasC directory
+      file:
+        path: "{{ jenkins_home }}/casc_configs"
+        state: directory
+        owner: jenkins
+        group: jenkins
+        mode: '0755'
+
+    - name: Deploy Jenkins Configuration as Code
+      template:
+        src: templates/jenkins-casc.yaml.j2
+        dest: "{{ jenkins_home }}/casc_configs/jenkins.yaml"
+        owner: jenkins
+        group: jenkins
+        mode: '0644'
+      notify: restart jenkins
+
+    - name: Install kubectl for Kubernetes deployments
+      get_url:
+        url: https://dl.k8s.io/release/v1.28.0/bin/linux/amd64/kubectl
+        dest: /usr/local/bin/kubectl
+        mode: '0755'
+
+    - name: Install AWS CLI
+      shell: |
+        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+        unzip -q /tmp/awscliv2.zip -d /tmp
+        /tmp/aws/install --update
+        rm -rf /tmp/aws /tmp/awscliv2.zip
+      args:
+        creates: /usr/local/bin/aws
+
+    - name: Install Terraform
+      unarchive:
+        src: https://releases.hashicorp.com/terraform/1.6.6/terraform_1.6.6_linux_amd64.zip
+        dest: /usr/local/bin
+        remote_src: yes
+        mode: '0755'
+        creates: /usr/local/bin/terraform
+
+    - name: Install Helm
+      shell: |
+        curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      args:
+        creates: /usr/local/bin/helm
+
+    - name: Configure firewall for Jenkins
+      firewalld:
+        port: "{{ jenkins_port }}/tcp"
+        permanent: yes
+        state: enabled
+        immediate: yes
+      failed_when: false
+
+    - name: Create Jenkins backup script
+      template:
+        src: templates/jenkins-backup.sh.j2
+        dest: /usr/local/bin/jenkins-backup.sh
+        mode: '0755'
+
+    - name: Setup Jenkins backup cron job
+      cron:
+        name: "Jenkins daily backup"
+        minute: "0"
+        hour: "2"
+        job: "/usr/local/bin/jenkins-backup.sh"
+        user: root
+
+    - name: Display Jenkins access information
+      debug:
+        msg:
+          - "Jenkins installation completed!"
+          - "Access URL: http://{{ ansible_default_ipv4.address }}:{{ jenkins_port }}"
+          - "Initial admin password: {{ jenkins_initial_password.content | b64decode if jenkins_initial_password is succeeded else 'Check /var/lib/jenkins/secrets/initialAdminPassword' }}"
+          - "SSH: ssh -i ~/.ssh/jenkins-key.pem ec2-user@{{ ansible_default_ipv4.address }}"
+
+  handlers:
+    - name: restart jenkins
+      systemd:
+        name: jenkins
+        state: restarted
+        daemon_reload: yes

@@ -1,0 +1,219 @@
+// ============================================================================
+// Jenkins Pipeline - Frontend Service
+// ============================================================================
+
+pipeline {
+    agent {
+        kubernetes {
+            yaml """
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    jenkins: agent
+spec:
+  containers:
+  - name: node
+    image: node:18-alpine
+    command:
+    - cat
+    tty: true
+  - name: docker
+    image: docker:24-dind
+    securityContext:
+      privileged: true
+    volumeMounts:
+    - name: docker-sock
+      mountPath: /var/run
+  - name: trivy
+    image: aquasec/trivy:latest
+    command:
+    - cat
+    tty: true
+  - name: kubectl
+    image: bitnami/kubectl:latest
+    command:
+    - cat
+    tty: true
+  volumes:
+  - name: docker-sock
+    emptyDir: {}
+"""
+        }
+    }
+    
+    environment {
+        SERVICE_NAME = 'frontend'
+        DOCKERHUB_USERNAME = 'khaledhawil'
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
+        IMAGE_TAG = "${env.GIT_COMMIT.take(8)}"
+        IMAGE_NAME = "${DOCKERHUB_USERNAME}/${SERVICE_NAME}"
+        KUBE_NAMESPACE = "${params.ENVIRONMENT == 'prod' ? 'devsecops-prod' : params.ENVIRONMENT == 'staging' ? 'devsecops-staging' : 'devsecops-dev'}"
+    }
+    
+    parameters {
+        choice(
+            name: 'ENVIRONMENT',
+            choices: ['dev', 'staging', 'prod'],
+            description: 'Target environment'
+        )
+        booleanParam(
+            name: 'DEPLOY',
+            defaultValue: true,
+            description: 'Deploy to Kubernetes'
+        )
+        booleanParam(
+            name: 'SKIP_TESTS',
+            defaultValue: false,
+            description: 'Skip tests'
+        )
+        booleanParam(
+            name: 'PUSH_LATEST',
+            defaultValue: false,
+            description: 'Also tag as latest'
+        )
+    }
+    
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 30, unit: 'MINUTES')
+        timestamps()
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    echo "Building ${SERVICE_NAME} - Commit: ${env.GIT_COMMIT}"
+                }
+            }
+        }
+        
+        stage('Install Dependencies') {
+            steps {
+                container('node') {
+                    dir("02-services/${SERVICE_NAME}") {
+                        sh '''
+                            echo "📦 Installing dependencies..."
+                            npm install
+                            npm run build
+                        '''
+                    }
+                }
+            }
+        }
+        
+        stage('Run Tests') {
+            when {
+                expression { !params.SKIP_TESTS }
+            }
+            steps {
+                container('node') {
+                    dir("02-services/${SERVICE_NAME}") {
+                        sh '''
+                            echo "🧪 Running tests..."
+                            npm run test -- --watchAll=false || true
+                        '''
+                    }
+                }
+            }
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                container('docker') {
+                    dir("02-services/${SERVICE_NAME}") {
+                        sh """
+                            echo "🐳 Building Docker image..."
+                            docker build \
+                                -t ${IMAGE_NAME}:${IMAGE_TAG} \
+                                -t ${IMAGE_NAME}:${params.ENVIRONMENT} \
+                                --label version=${IMAGE_TAG} \
+                                --label environment=${params.ENVIRONMENT} \
+                                .
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Security Scan') {
+            steps {
+                container('trivy') {
+                    sh """
+                        echo "🔒 Scanning image with Trivy..."
+                        trivy image --severity HIGH,CRITICAL --exit-code 0 ${IMAGE_NAME}:${IMAGE_TAG}
+                    """
+                }
+            }
+        }
+        
+        stage('Push to DockerHub') {
+            steps {
+                container('docker') {
+                    sh """
+                        echo "🔐 Logging into DockerHub..."
+                        echo \${DOCKERHUB_CREDENTIALS_PSW} | docker login -u \${DOCKERHUB_CREDENTIALS_USR} --password-stdin
+                        
+                        echo "📤 Pushing ${IMAGE_NAME}:${IMAGE_TAG}..."
+                        docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                        docker push ${IMAGE_NAME}:${params.ENVIRONMENT}
+                    """
+                    
+                    script {
+                        if (params.PUSH_LATEST) {
+                            sh """
+                                docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest
+                                docker push ${IMAGE_NAME}:latest
+                            """
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy to Kubernetes') {
+            when {
+                expression { params.DEPLOY }
+            }
+            steps {
+                container('kubectl') {
+                    sh """
+                        echo "🚀 Deploying to Kubernetes..."
+                        kubectl set image deployment/${SERVICE_NAME} \
+                            ${SERVICE_NAME}=${IMAGE_NAME}:${IMAGE_TAG} \
+                            -n ${KUBE_NAMESPACE} || echo "Deployment not found"
+                        
+                        kubectl rollout status deployment/${SERVICE_NAME} \
+                            -n ${KUBE_NAMESPACE} \
+                            --timeout=300s || echo "Rollout check skipped"
+                    """
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            script {
+                echo """
+                ═══════════════════════════════════════
+                Build Summary - ${SERVICE_NAME}
+                ═══════════════════════════════════════
+                Status: ${currentBuild.currentResult}
+                Duration: ${currentBuild.durationString}
+                Image: ${IMAGE_NAME}:${IMAGE_TAG}
+                Environment: ${params.ENVIRONMENT}
+                ═══════════════════════════════════════
+                """
+            }
+        }
+        success {
+            echo "✅ ${SERVICE_NAME} build succeeded!"
+        }
+        failure {
+            echo "❌ ${SERVICE_NAME} build failed!"
+        }
+    }
+}

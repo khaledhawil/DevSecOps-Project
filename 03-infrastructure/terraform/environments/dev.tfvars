@@ -12,34 +12,42 @@ database_subnet_cidrs  = ["10.0.21.0/24", "10.0.22.0/24"]
 enable_vpc_flow_logs   = true
 
 # EKS Configuration
-eks_cluster_version    = "1.28"
-eks_node_instance_types = ["t3.medium"]
-eks_node_disk_size     = 50
-eks_node_desired_size  = 2
-eks_node_min_size      = 1
-eks_node_max_size      = 4
+eks_cluster_version     = "1.28"
+eks_node_instance_types = ["t3.small"]
+eks_node_disk_size      = 20
+eks_node_desired_size   = 1
+eks_node_min_size       = 1
+eks_node_max_size       = 2
 
 # RDS Configuration
-rds_engine_version          = "15.4"
-rds_instance_class          = "db.t3.micro"
+rds_engine_version          = "15.7"
+rds_instance_class          = "db.t4g.micro"
 rds_allocated_storage       = 20
 rds_max_allocated_storage   = 50
 rds_multi_az                = false
-rds_backup_retention_period = 3
+rds_backup_retention_period = 1
 rds_database_name           = "devsecops_dev"
-rds_master_username         = "dbadmin"
+rds_username                = "dbadmin"
 
 # ElastiCache Configuration
-redis_engine_version = "7.0"
-redis_node_type      = "cache.t3.micro"
-redis_num_nodes      = 1
+redis_engine_version   = "7.0"
+redis_node_type        = "cache.t4g.micro"
+redis_num_cache_nodes  = 1
 
 # Monitoring Configuration
-cloudwatch_log_retention = 7
-alarm_email              = "devops-team@example.com"
+log_retention_days = 7
+alarm_email        = "khaledhawil91@gmail.com"
 
 # Security Configuration
 allowed_cidr_blocks = ["0.0.0.0/0"]
+
+# Jenkins Configuration
+jenkins_instance_type            = "t3.small"  # Free tier eligible
+jenkins_root_volume_size         = 20
+jenkins_data_volume_size         = 30
+jenkins_allowed_ssh_cidr_blocks  = ["0.0.0.0/0"]  # Restrict this in production
+jenkins_allowed_cidr_blocks      = ["0.0.0.0/0"]  # Restrict this in production
+jenkins_artifacts_bucket         = "devsecops-dev-jenkins-artifacts"
 
 # Tags
 additional_tags = {

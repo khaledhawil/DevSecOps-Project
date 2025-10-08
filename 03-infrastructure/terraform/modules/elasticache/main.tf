@@ -26,8 +26,8 @@ resource "aws_elasticache_parameter_group" "main" {
 
 # ElastiCache Replication Group
 resource "aws_elasticache_replication_group" "main" {
-  replication_group_id       = "${var.name_prefix}-redis"
-  replication_group_description = "Redis cluster for ${var.name_prefix}"
+  replication_group_id = "${var.name_prefix}-redis"
+  description          = "Redis cluster for ${var.name_prefix}"
 
   engine               = "redis"
   engine_version       = var.engine_version
@@ -43,7 +43,7 @@ resource "aws_elasticache_replication_group" "main" {
 
   at_rest_encryption_enabled = true
   transit_encryption_enabled = true
-  auth_token_enabled         = true
+  auth_token                 = random_password.redis_auth_token.result
 
   snapshot_retention_limit = 5
   snapshot_window          = "03:00-05:00"

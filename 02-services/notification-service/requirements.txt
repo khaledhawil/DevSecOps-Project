@@ -10,8 +10,8 @@ requests==2.31.0
 Werkzeug==3.0.1
 gunicorn==21.2.0
 
-# Email
-python-smtplib==0.1.1
+# Email (python-smtplib doesn't exist, SMTP is built into Python)
+# No additional package needed for SMTP
 
 # Testing
 pytest==7.4.3

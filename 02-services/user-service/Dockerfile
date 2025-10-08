@@ -41,9 +41,9 @@ FROM alpine:3.18
 # Install runtime dependencies
 RUN apk --no-cache add ca-certificates tzdata wget
 
-# Create non-root user
-RUN addgroup -g 1000 appuser && \
-    adduser -D -u 1000 -G appuser appuser
+# Create non-root user (use different GID/UID to avoid conflicts)
+RUN addgroup -g 10001 appuser && \
+    adduser -D -u 10001 -G appuser appuser
 
 # Set working directory
 WORKDIR /app

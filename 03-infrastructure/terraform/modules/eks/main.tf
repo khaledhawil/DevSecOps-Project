@@ -80,9 +80,11 @@ resource "aws_eks_node_group" "main" {
     max_unavailable = 1
   }
 
-  remote_access {
-    source_security_group_ids = [var.node_security_group_id]
-  }
+  # Remote access is optional - only include if SSH key is provided
+  # Commenting out to avoid empty ec2_ssh_key error
+  # remote_access {
+  #   source_security_group_ids = [var.node_security_group_id]
+  # }
 
   tags = merge(
     var.tags,
@@ -142,12 +144,49 @@ resource "aws_eks_addon" "coredns" {
   depends_on = [aws_eks_node_group.main]
 }
 
+# EBS CSI Driver IAM Role
+resource "aws_iam_role" "ebs_csi_driver" {
+  name = "${var.name_prefix}-ebs-csi-driver-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Federated = aws_iam_openid_connect_provider.cluster.arn
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "${replace(aws_iam_openid_connect_provider.cluster.url, "https://", "")}:aud" = "sts.amazonaws.com"
+            "${replace(aws_iam_openid_connect_provider.cluster.url, "https://", "")}:sub" = "system:serviceaccount:kube-system:ebs-csi-controller-sa"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "ebs_csi_driver" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+  role       = aws_iam_role.ebs_csi_driver.name
+}
+
 resource "aws_eks_addon" "ebs_csi_driver" {
-  cluster_name = aws_eks_cluster.main.name
-  addon_name   = "aws-ebs-csi-driver"
+  cluster_name             = aws_eks_cluster.main.name
+  addon_name               = "aws-ebs-csi-driver"
+  service_account_role_arn = aws_iam_role.ebs_csi_driver.arn
 
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
 
   tags = var.tags
+
+  depends_on = [
+    aws_eks_node_group.main,
+    aws_iam_role_policy_attachment.ebs_csi_driver
+  ]
 }

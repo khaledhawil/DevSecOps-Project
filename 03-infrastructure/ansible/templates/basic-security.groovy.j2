@@ -1,0 +1,30 @@
+#!groovy
+import jenkins.model.*
+import hudson.security.*
+import jenkins.security.s2m.AdminWhitelistRule
+
+def instance = Jenkins.getInstance()
+
+// Create admin user
+def hudsonRealm = new HudsonPrivateSecurityRealm(false)
+hudsonRealm.createAccount("{{ jenkins_admin_username }}", "{{ jenkins_admin_password }}")
+instance.setSecurityRealm(hudsonRealm)
+
+// Set authorization strategy
+def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
+strategy.setAllowAnonymousRead(false)
+instance.setAuthorizationStrategy(strategy)
+
+// Disable remoting (CLI access from master)
+instance.getDescriptor("jenkins.CLI").get().setEnabled(false)
+
+// Enable CSRF protection
+instance.setCrumbIssuer(new DefaultCrumbIssuer(true))
+
+// Disable usage statistics
+instance.setNoUsageStatistics(true)
+
+// Save configuration
+instance.save()
+
+println("Security configuration completed!")
